@@ -38,6 +38,7 @@
             border: 2px solid #d81b60;
             background-color: #f3f3f3;
             max-width: 100%;
+            cursor: pointer;
         }
         #pieces-container {
             display: grid;
@@ -49,17 +50,17 @@
             padding: 10px;
         }
         .puzzle-piece {
-            cursor: grab;
+            cursor: pointer;
             border: 1px solid #ccc;
             border-radius: 5px;
-            max-width: 100px;
-            max-height: 100px;
+            max-width: 80px; /* Smaller pieces */
+            max-height: 80px;
             width: 100%;
             height: auto;
-            touch-action: none; /* Improve touch support */
+            touch-action: none;
         }
-        .puzzle-piece:active {
-            cursor: grabbing;
+        .puzzle-piece.selected {
+            border: 3px solid #d81b60; /* Highlight selected piece */
         }
         #start-button {
             margin-top: 20px;
@@ -99,15 +100,21 @@
         const startButton = document.getElementById('start-button');
         const message = document.getElementById('message');
 
-        // Image URL from your embed code
-        const imageUrl = 'https://i.ibb.co/gbGrD981/IMG-4593.jpg';
+        // Array of image URLs (replace these dummy links with your actual image URLs)
+        const imageUrls = [
+            'https://i.ibb.co/gbGrD981/IMG-4593.jpg', // Your provided image
+            'https://example.com/taylor-swift-image1.jpg', // Replace this
+            'https://example.com/taylor-swift-image2.jpg', // Replace this
+            'https://example.com/taylor-swift-image3.jpg'  // Replace this
+        ];
 
         let pieces = [];
         let placedPieces = [];
+        let selectedPiece = null;
         const gridRows = 3;
         const gridCols = 4;
         const pieceCount = gridRows * gridCols;
-        const maxDimension = 600; // Max width or height for the image
+        const maxDimension = 400; // Reduced for smaller canvas
 
         // Draw gridlines on canvas
         function drawGridlines() {
@@ -145,6 +152,10 @@
 
         // Load and initialize the game
         function initGame() {
+            // Randomly select an image
+            const imageUrl = imageUrls[Math.floor(Math.random() * imageUrls.length)];
+            console.log('Selected image:', imageUrl);
+
             const img = new Image();
             img.crossOrigin = 'Anonymous';
             img.src = imageUrl;
@@ -176,6 +187,7 @@
                 // Clear previous pieces and canvas
                 pieces = [];
                 placedPieces = [];
+                selectedPiece = null;
                 piecesContainer.innerHTML = '';
                 message.style.display = 'none';
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -221,13 +233,17 @@
 
                         pieces.push(piece);
                         pieceCanvas.className = 'puzzle-piece';
-                        pieceCanvas.draggable = true;
 
-                        // Drag and drop events
-                        pieceCanvas.addEventListener('dragstart', (e) => {
-                            console.log('Dragging piece:', pieces.indexOf(piece));
-                            e.dataTransfer.setData('text/plain', pieces.indexOf(piece));
-                            e.dataTransfer.setDragImage(pieceCanvas, pieceWidth / 2, pieceHeight / 2);
+                        // Click to select piece
+                        pieceCanvas.addEventListener('click', () => {
+                            console.log('Selected piece:', { row: piece.row, col: piece.col });
+                            // Deselect previous piece
+                            if (selectedPiece) {
+                                selectedPiece.canvas.classList.remove('selected');
+                            }
+                            // Select new piece
+                            selectedPiece = piece;
+                            pieceCanvas.classList.add('selected');
                         });
 
                         piecesContainer.appendChild(pieceCanvas);
@@ -237,12 +253,8 @@
                 // Shuffle pieces
                 shufflePieces();
 
-                // Set up canvas drag-and-drop
-                canvas.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    console.log('Dragging over canvas');
-                });
-                canvas.addEventListener('drop', handleDrop);
+                // Set up canvas click event
+                canvas.addEventListener('click', handleCanvasClick);
             };
 
             img.onerror = () => {
@@ -264,26 +276,18 @@
             });
         }
 
-        // Handle piece drop on canvas
-        function handleDrop(e) {
-            e.preventDefault();
-            const pieceIndex = parseInt(e.dataTransfer.getData('text/plain'));
-            console.log('Dropped piece index:', pieceIndex);
-            if (isNaN(pieceIndex)) {
-                console.error('Invalid piece index');
-                return;
-            }
-            const piece = pieces[pieceIndex];
-            if (!piece) {
-                console.error('Piece not found for index:', pieceIndex);
+        // Handle canvas click to place piece
+        function handleCanvasClick(e) {
+            if (!selectedPiece) {
+                console.log('No piece selected');
                 return;
             }
 
-            // Get drop position relative to canvas
+            // Get click position relative to canvas
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            console.log('Drop coordinates:', { x, y });
+            console.log('Canvas click at:', { x, y });
 
             // Calculate nearest grid cell
             const pieceWidth = canvas.width / gridCols;
@@ -292,25 +296,28 @@
             const gridRow = Math.floor(y / pieceHeight);
             const snapX = gridCol * pieceWidth;
             const snapY = gridRow * pieceHeight;
-            console.log('Snapping to grid cell:', { gridRow, gridCol, snapX, snapY });
+            console.log('Attempting to place at grid cell:', { gridRow, gridCol });
 
-            // Check if the dropped grid cell matches the piece's correct position
-            if (gridCol === piece.col && gridRow === piece.row) {
-                piece.x = snapX;
-                piece.y = snapY;
+            // Check if the clicked grid cell matches the piece's correct position
+            if (gridCol === selectedPiece.col && gridRow === selectedPiece.row) {
+                selectedPiece.x = snapX;
+                selectedPiece.y = snapY;
 
                 // Add to placed pieces
-                placedPieces.push(piece);
+                placedPieces.push(selectedPiece);
 
                 // Remove from pieces array and container
+                const pieceIndex = pieces.indexOf(selectedPiece);
                 pieces.splice(pieceIndex, 1);
-                piece.canvas.remove();
+                selectedPiece.canvas.remove();
+                selectedPiece.canvas.classList.remove('selected');
+                selectedPiece = null;
 
-                // Redraw all placed pieces and gridlines
+                // Redraw canvas
                 redrawCanvas();
 
-                // Check for adjacent correct pieces to snap together
-                mergeAdjacentPieces(piece);
+                // Check for adjacent correct pieces
+                mergeAdjacentPieces(selectedPiece);
 
                 // Check if puzzle is complete
                 if (placedPieces.length === pieceCount) {
@@ -319,7 +326,9 @@
                     console.log('Puzzle complete!');
                 }
             } else {
-                console.log('Incorrect placement for piece:', { row: piece.row, col: piece.col });
+                console.log('Incorrect placement for piece:', { row: selectedPiece.row, col: selectedPiece.col });
+                selectedPiece.canvas.classList.remove('selected');
+                selectedPiece = null;
             }
         }
 
