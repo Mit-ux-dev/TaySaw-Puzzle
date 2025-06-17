@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swiftie Jigsaw Puzzle</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5e1fd; /* Pastel purple for Swiftie aesthetic */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            color: #333;
+            overflow-x: hidden;
+        }
+        h1 {
+            font-size: 2.5em;
+            color: #d81b60; /* Taylor Swift's signature pink */
+            text-align: center;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            max-width: 90vw;
+        }
+        #puzzle-canvas {
+            border: 2px solid #d81b60;
+            background-color: #f3f3f3;
+            max-width: 100%;
+        }
+        #pieces-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); /* 4 columns for pieces */
+            gap: 10px;
+            margin-top: 20px;
+            max-width: 600px;
+            justify-content: center;
+            padding: 10px;
+        }
+        .puzzle-piece {
+            cursor: grab;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            max-width: 100px;
+            max-height: 100px;
+            width: 100%;
+            height: auto;
+            touch-action: none; /* Improve touch support */
+        }
+        .puzzle-piece:active {
+            cursor: grabbing;
+        }
+        #start-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1.2em;
+            background-color: #d81b60;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #start-button:hover {
+            background-color: #b0004a;
+        }
+        #message {
+            margin-top: 20px;
+            font-size: 1.5em;
+            color: #d81b60;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Swiftie Jigsaw Puzzle</h1>
+    <div id="game-container">
+        <canvas id="puzzle-canvas"></canvas>
+        <div id="pieces-container"></div>
+        <button id="start-button">Start Puzzle</button>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('puzzle-canvas');
+        const ctx = canvas.getContext('2d');
+        const piecesContainer = document.getElementById('pieces-container');
+        const startButton = document.getElementById('start-button');
+        const message = document.getElementById('message');
+
+        // Image URL from your embed code
+        const imageUrl = 'https://i.ibb.co/gbGrD981/IMG-4593.jpg';
+
+        let pieces = [];
+        let placedPieces = [];
+        const gridRows = 3;
+        const gridCols = 4;
+        const pieceCount = gridRows * gridCols;
+        const maxDimension = 600; // Max width or height for the image
+
+        // Draw gridlines on canvas
+        function drawGridlines() {
+            const pieceWidth = canvas.width / gridCols;
+            const pieceHeight = canvas.height / gridRows;
+
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 1;
+
+            // Vertical lines
+            for (let col = 1; col < gridCols; col++) {
+                ctx.beginPath();
+                ctx.moveTo(col * pieceWidth, 0);
+                ctx.lineTo(col * pieceWidth, canvas.height);
+                ctx.stroke();
+            }
+
+            // Horizontal lines
+            for (let row = 1; row < gridRows; row++) {
+                ctx.beginPath();
+                ctx.moveTo(0, row * pieceHeight);
+                ctx.lineTo(canvas.width, row * pieceHeight);
+                ctx.stroke();
+            }
+        }
+
+        // Redraw all placed pieces and gridlines
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            placedPieces.forEach(piece => {
+                ctx.drawImage(piece.canvas, piece.x, piece.y);
+            });
+            drawGridlines();
+        }
+
+        // Load and initialize the game
+        function initGame() {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.src = imageUrl;
+
+            img.onload = () => {
+                // Calculate scaled dimensions
+                let imgWidth = img.width;
+                let imgHeight = img.height;
+                const aspectRatio = imgWidth / imgHeight;
+
+                if (imgWidth > imgHeight) {
+                    // Landscape: scale based on width
+                    if (imgWidth > maxDimension) {
+                        imgWidth = maxDimension;
+                        imgHeight = imgWidth / aspectRatio;
+                    }
+                } else {
+                    // Portrait: scale based on height
+                    if (imgHeight > maxDimension) {
+                        imgHeight = maxDimension;
+                        imgWidth = imgHeight * aspectRatio;
+                    }
+                }
+
+                // Set canvas size to match scaled image
+                canvas.width = imgWidth;
+                canvas.height = imgHeight;
+
+                // Clear previous pieces and canvas
+                pieces = [];
+                placedPieces = [];
+                piecesContainer.innerHTML = '';
+                message.style.display = 'none';
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw gridlines
+                drawGridlines();
+
+                // Calculate piece dimensions
+                const pieceWidth = imgWidth / gridCols;
+                const pieceHeight = imgHeight / gridRows;
+
+                // Create puzzle pieces
+                for (let row = 0; row < gridRows; row++) {
+                    for (let col = 0; col < gridCols; col++) {
+                        const pieceCanvas = document.createElement('canvas');
+                        pieceCanvas.width = pieceWidth;
+                        pieceCanvas.height = pieceHeight;
+                        const pieceCtx = pieceCanvas.getContext('2d');
+
+                        // Draw scaled image portion on piece
+                        pieceCtx.drawImage(
+                            img,
+                            col * (img.width / gridCols),
+                            row * (img.height / gridRows),
+                            img.width / gridCols,
+                            img.height / gridRows,
+                            0,
+                            0,
+                            pieceWidth,
+                            pieceHeight
+                        );
+
+                        // Store piece data
+                        const piece = {
+                            canvas: pieceCanvas,
+                            row,
+                            col,
+                            x: 0,
+                            y: 0,
+                            correctX: col * pieceWidth,
+                            correctY: row * pieceHeight
+                        };
+
+                        pieces.push(piece);
+                        pieceCanvas.className = 'puzzle-piece';
+                        pieceCanvas.draggable = true;
+
+                        // Drag and drop events
+                        pieceCanvas.addEventListener('dragstart', (e) => {
+                            console.log('Dragging piece:', pieces.indexOf(piece));
+                            e.dataTransfer.setData('text/plain', pieces.indexOf(piece));
+                            e.dataTransfer.setDragImage(pieceCanvas, pieceWidth / 2, pieceHeight / 2);
+                        });
+
+                        piecesContainer.appendChild(pieceCanvas);
+                    }
+                }
+
+                // Shuffle pieces
+                shufflePieces();
+
+                // Set up canvas drag-and-drop
+                canvas.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    console.log('Dragging over canvas');
+                });
+                canvas.addEventListener('drop', handleDrop);
+            };
+
+            img.onerror = () => {
+                alert('Failed to load the image. Please check the image URL and try again.');
+            };
+        }
+
+        // Shuffle pieces in the container
+        function shufflePieces() {
+            // Shuffle array order
+            for (let i = pieces.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
+            }
+            // Re-append pieces to container in shuffled order
+            piecesContainer.innerHTML = '';
+            pieces.forEach(piece => {
+                piecesContainer.appendChild(piece.canvas);
+            });
+        }
+
+        // Handle piece drop on canvas
+        function handleDrop(e) {
+            e.preventDefault();
+            const pieceIndex = parseInt(e.dataTransfer.getData('text/plain'));
+            console.log('Dropped piece index:', pieceIndex);
+            if (isNaN(pieceIndex)) {
+                console.error('Invalid piece index');
+                return;
+            }
+            const piece = pieces[pieceIndex];
+            if (!piece) {
+                console.error('Piece not found for index:', pieceIndex);
+                return;
+            }
+
+            // Get drop position relative to canvas
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            console.log('Drop coordinates:', { x, y });
+
+            // Calculate nearest grid cell
+            const pieceWidth = canvas.width / gridCols;
+            const pieceHeight = canvas.height / gridRows;
+            const gridCol = Math.floor(x / pieceWidth);
+            const gridRow = Math.floor(y / pieceHeight);
+            const snapX = gridCol * pieceWidth;
+            const snapY = gridRow * pieceHeight;
+            console.log('Snapping to grid cell:', { gridRow, gridCol, snapX, snapY });
+
+            // Check if the dropped grid cell matches the piece's correct position
+            if (gridCol === piece.col && gridRow === piece.row) {
+                piece.x = snapX;
+                piece.y = snapY;
+
+                // Add to placed pieces
+                placedPieces.push(piece);
+
+                // Remove from pieces array and container
+                pieces.splice(pieceIndex, 1);
+                piece.canvas.remove();
+
+                // Redraw all placed pieces and gridlines
+                redrawCanvas();
+
+                // Check for adjacent correct pieces to snap together
+                mergeAdjacentPieces(piece);
+
+                // Check if puzzle is complete
+                if (placedPieces.length === pieceCount) {
+                    message.textContent = 'You’re a Swiftie superstar! Puzzle complete!';
+                    message.style.display = 'block';
+                    console.log('Puzzle complete!');
+                }
+            } else {
+                console.log('Incorrect placement for piece:', { row: piece.row, col: piece.col });
+            }
+        }
+
+        // Merge adjacent correct pieces
+        function mergeAdjacentPieces(piece) {
+            const pieceWidth = canvas.width / gridCols;
+            const pieceHeight = canvas.height / gridRows;
+
+            placedPieces.forEach(otherPiece => {
+                if (otherPiece !== piece) {
+                    // Check if pieces are adjacent in the grid
+                    const isRightNeighbor = piece.row === otherPiece.row && piece.col === otherPiece.col + 1;
+                    const isLeftNeighbor = piece.row === otherPiece.row && piece.col === otherPiece.col - 1;
+                    const isTopNeighbor = piece.col === otherPiece.col && piece.row === otherPiece.row - 1;
+                    const isBottomNeighbor = piece.col === otherPiece.col && piece.row === otherPiece.row + 1;
+
+                    if (isRightNeighbor || isLeftNeighbor || isTopNeighbor || isBottomNeighbor) {
+                        // Redraw to simulate snapping
+                        ctx.drawImage(otherPiece.canvas, otherPiece.x, otherPiece.y);
+                        ctx.drawImage(piece.canvas, piece.x, piece.y);
+                    }
+                }
+            });
+        }
+
+        // Start button event
+        startButton.addEventListener('click', () => {
+            console.log('Starting new game');
+            initGame();
+        });
+
+        // Initialize game on page load
+        console.log('Initializing game');
+        initGame();
+    </script>
+</body>
+</html>
